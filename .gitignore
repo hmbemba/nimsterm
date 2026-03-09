@@ -3,5 +3,6 @@ git.md
 commands.xsh
 *.code-workspace
 ctx_cache/
-task.nims
-publish.md
+*.nims
+*.db
+finalOutput.md

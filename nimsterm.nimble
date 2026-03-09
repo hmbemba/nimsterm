@@ -1,6 +1,6 @@
 # nimsterm.nimble
 
-version       = "0.1.1" 
+version       = "0.1.4" 
 author        = "you"
 description   = "Windows-friendly terminal helpers that work in both Nim and NimScript."
 license       = "MIT"

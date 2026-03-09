@@ -2,6 +2,9 @@ import
     std/[os, strutils]
     ,./types
 
+when not defined(nimscript):
+    import std/terminal
+
 proc parseIntOr*(s: string; fallback: int): int =
     try:
         result = s.strip().parseInt()
@@ -9,21 +12,19 @@ proc parseIntOr*(s: string; fallback: int): int =
         result = fallback
 
 proc termSize*(fallbackW = 80; fallbackH = 24): TermSize =
-    when not defined(nimscript):
-        when compiles(terminalSize()):
-            let (w, h) = terminalSize()
-            result     = TermSize(
-                w       : max(1, w)
-                ,h      : max(1, h)
-            )
-        else:
-            let w       = parseIntOr(getEnv("COLUMNS", $fallbackW), fallbackW)
-            let h       = parseIntOr(getEnv("LINES",   $fallbackH), fallbackH)
-            result      = TermSize(w: max(1, w), h: max(1, h))
+    when defined(nimscript):
+        let w = parseIntOr(getEnv("COLUMNS", $fallbackW), fallbackW)
+        let h = parseIntOr(getEnv("LINES",   $fallbackH), fallbackH)
+        result = TermSize(w: max(1, w), h: max(1, h))
     else:
-        let w           = parseIntOr(getEnv("COLUMNS", $fallbackW), fallbackW)
-        let h           = parseIntOr(getEnv("LINES",   $fallbackH), fallbackH)
-        result          = TermSize(w: max(1, w), h: max(1, h))
+        try:
+            let w = terminalWidth()
+            let h = terminalHeight()
+            result = TermSize(w: max(1, w), h: max(1, h))
+        except CatchableError:
+            let w = parseIntOr(getEnv("COLUMNS", $fallbackW), fallbackW)
+            let h = parseIntOr(getEnv("LINES",   $fallbackH), fallbackH)
+            result = TermSize(w: max(1, w), h: max(1, h))
 
 proc termWidth*(fallbackW = 80): int =
     termSize(fallbackW = fallbackW).w
@@ -62,8 +63,9 @@ discard """
 Terminal sizing and ANSI stripping.
 
 termSize:
-- Native Nim: uses terminalSize() when available
+- Native Nim: uses std/terminal terminalWidth() / terminalHeight()
 - NimScript: uses env vars COLUMNS / LINES
+- Fallback: 80x24
 
 stripAnsi:
 - Removes common ESC[ ... control sequences used by this library

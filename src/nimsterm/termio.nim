@@ -1,36 +1,41 @@
-import
-    std/strutils
+import std/strutils
 
-proc termWrite*(s: string) =
-    when defined(nimscript):
+when defined(nimscript):
+    # NimScript version - uses echo for output
+    proc termWrite*(s: string) =
+        echo s  # NimScript doesn't have stdout access, so we use echo
+
+    proc termFlush*() =
+        discard  # No-op in NimScript
+
+    proc termWriteFlush*(s: string) =
         echo s
-    else:
+
+    proc readInputLine*(): string =
+        result = ""  # Cannot read from stdin in NimScript
+else:
+    # Compiled Nim version - uses std/syncio
+    import std/syncio
+
+    proc termWrite*(s: string) =
         stdout.write s
 
-proc termFlush*() =
-    when defined(nimscript):
-        discard
-    else:
+    proc termFlush*() =
         stdout.flushFile()
 
-proc termWriteFlush*(s: string) =
-    termWrite(s)
-    termFlush()
+    proc termWriteFlush*(s: string) =
+        stdout.write s
+        stdout.flushFile()
 
-proc readInputLine*(): string =
-    when defined(windows):
-        when defined(nimscript):
-            result = readLineFromStdIn().strip()
-        else:
-            result = stdin.readLine.strip()
-    else:
-        result = readLineFromStdIn().strip()
+    proc readInputLine*(): string =
+        result = stdin.readLine().strip()
 
 discard """
 
-Nim + NimScript friendly IO helpers.
+Cross-platform terminal IO helpers.
+Works on Linux, Windows, and macOS.
 
-NimScript fallback uses echo (newline) for output.
-Input uses readLineFromStdIn() where needed.
+Note: In NimScript mode, output uses echo (newlines added).
+In compiled mode, uses std/syncio for direct stdout control.
 
 """

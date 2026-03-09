@@ -2,6 +2,7 @@ import
     std/strutils
     ,./types
     ,./style
+    ,./rgb
 
 proc alignText*(text: string; width: int; align: Align): string =
     case align
@@ -173,11 +174,107 @@ proc simpleTable*(headers: openArray[string]; rows: openArray[seq[string]]): str
 
     lines.join("\n")
 
+# ─── new: Rich-style borderless table ─────────────────────────────
+
+type
+    RichColumn* = object
+        header*     : string
+        align*      : Align
+        headerColor*: Color
+        cellColor*  : Color
+        cellStyle*  : Style
+        minWidth*   : int
+
+proc richCol*(
+    header      : string
+    ,align      : Align  = alignLeft
+    ,headerColor: Color  = cyan
+    ,cellColor  : Color  = colDefault
+    ,cellStyle  : Style  = bold
+    ,minWidth   : int    = 0
+)               : RichColumn =
+    RichColumn(
+        header      : header
+        ,align      : align
+        ,headerColor: headerColor
+        ,cellColor  : cellColor
+        ,cellStyle  : cellStyle
+        ,minWidth   : minWidth
+    )
+
+proc richTable*(
+    cols            : openArray[RichColumn]
+    ,rows           : openArray[seq[string]]
+    ,colGap         : int    = 4
+    ,dimAlternate   : bool   = true
+    ,headerUnderline: bool   = false
+): string =
+    ## Borderless Rich-style table with colored headers and styled cells.
+    let numCols = cols.len
+
+    # Calculate column widths
+    var widths = newSeq[int](numCols)
+    for i, c in cols:
+        widths[i] = max(c.minWidth, c.header.len)
+
+    for row in rows:
+        for i in 0 ..< min(numCols, row.len):
+            widths[i] = max(widths[i], row[i].len)
+
+    var lines: seq[string] = @[]
+
+    # Header row
+    var hdr = ""
+    for i, c in cols:
+        let cell = alignText(c.header, widths[i], c.align)
+        hdr &= $styled(cell).fg(c.headerColor).style(bold)
+        if i < numCols - 1:
+            hdr &= " ".repeat(colGap)
+    lines.add(hdr)
+
+    # Optional underline
+    if headerUnderline:
+        var ul = ""
+        for i, w in widths:
+            ul &= "─".repeat(w)
+            if i < numCols - 1:
+                ul &= " ".repeat(colGap)
+        lines.add($styled(ul).fg(brightBlack))
+
+    # Data rows
+    for rowIdx, row in rows:
+        var line = ""
+        let isDim = dimAlternate and (rowIdx mod 2 == 1)
+
+        for i in 0 ..< numCols:
+            let cellText = if i < row.len: row[i] else: ""
+            let aligned  = alignText(cellText, widths[i], cols[i].align)
+
+            var st = styled(aligned)
+
+            # Apply column cell color
+            if cols[i].cellColor != colDefault:
+                st = st.fg(cols[i].cellColor)
+
+            # Apply dim on alternating rows
+            if isDim:
+                st = st.style(dim)
+            else:
+                st = st.style(cols[i].cellStyle)
+
+            line &= $st
+            if i < numCols - 1:
+                line &= " ".repeat(colGap)
+        lines.add(line)
+
+    lines.join("\n")
+
 discard """
 
 Tables:
 - table(headers, rows, ...)         : auto width + borders
 - table(cols, rows, ...)            : explicit column width + alignment
 - simpleTable(headers, rows)        : header styled, no box borders
+- richTable(cols, rows, ...)        : Rich-style borderless with colors and alternating rows
 
 """

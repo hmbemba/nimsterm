@@ -23,7 +23,5 @@ export
     ,rgb
 
 discard """
-
 This file re-exports the whole nimsterm surface area.
-
 """
