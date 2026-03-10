@@ -6,7 +6,9 @@ import
     std/strutils
     ,./mdtypes
     ,./parser
-    ,../nimsterm
+    ,../nimsterm/types      # Fix #16: Specific import instead of ../nimsterm
+    ,../nimsterm/style      # Fix #16: Specific import instead of ../nimsterm
+    ,../nimsterm/table      # Fix #16: Specific import instead of ../nimsterm
 
 # ── Theme ────────────────────────────────────────────────────────
 
@@ -67,21 +69,45 @@ proc renderToken*(tok: MdToken): string =
         $styled(" [" & tok.imgUrl & "]").fg(brightBlack)
 
 proc renderTokens*(tokens: seq[MdToken]): string =
+    # Fix #19: Use seq + join instead of repeated concatenation
+    var parts: seq[string] = newSeqOfCap[string](tokens.len)
     for tok in tokens:
-        result &= renderToken(tok)
+        parts.add(renderToken(tok))
+    result = parts.join("")
 
 # ── Block rendering ──────────────────────────────────────────────
 
 proc renderBlock*(blk: MdBlock; theme: MdTheme; indent: int = 0): string
 
-proc renderBlocks*(blocks: seq[MdBlock]; theme: MdTheme; indent: int = 0): string =
-    var parts: seq[string] = @[]
+# Fix #20: New proc that returns lines as seq to avoid split/join cycles
+proc renderBlocksSeq*(blocks: seq[MdBlock]; theme: MdTheme; indent: int = 0): seq[string] =
+    ## Renders blocks and returns as sequence of lines (no final join).
+    ## This avoids unnecessary join/split cycles when processing nested blocks.
     let spacer = "\n".repeat(theme.blockSpacing)
+    var first = true
+    
     for blk in blocks:
         let r = renderBlock(blk, theme, indent)
         if r.len > 0:
-            parts.add r
-    parts.join("\n" & spacer)
+            # Split the rendered block into lines and add to result
+            let lines = r.split('\n')
+            for line in lines:
+                if first or line.len > 0:  # Skip empty spacer lines at start
+                    result.add(line)
+            first = false
+            
+            # Add spacer lines between blocks (but not after last)
+            if theme.blockSpacing > 0:
+                for _ in 1 .. theme.blockSpacing:
+                    result.add("")
+    
+    # Remove trailing empty lines added by spacer
+    while result.len > 0 and result[^1].len == 0:
+        discard result.pop()
+
+proc renderBlocks*(blocks: seq[MdBlock]; theme: MdTheme; indent: int = 0): string =
+    # Fix #20: Use renderBlocksSeq to avoid intermediate split/join
+    renderBlocksSeq(blocks, theme, indent).join("\n")
 
 proc renderBlock*(blk: MdBlock; theme: MdTheme; indent: int = 0): string =
     let pad = " ".repeat(indent)
@@ -157,9 +183,10 @@ proc renderBlock*(blk: MdBlock; theme: MdTheme; indent: int = 0): string =
         return lines.join("\n")
 
     of mbBlockquote:
+        # Fix #20: Use renderBlocksSeq to avoid split/join cycle
         var lines: seq[string] = @[]
-        let inner = renderBlocks(blk.quoteBlocks, theme, indent + theme.indentWidth)
-        for line in inner.split('\n'):
+        let innerLines = renderBlocksSeq(blk.quoteBlocks, theme, indent + theme.indentWidth)
+        for line in innerLines:
             lines.add pad & $styled(theme.quotePrefix).fg(brightBlack).style(italic) &
                        $styled(line.strip()).style(dim, italic)
         return lines.join("\n")
@@ -189,7 +216,7 @@ proc renderBlock*(blk: MdBlock; theme: MdTheme; indent: int = 0): string =
         return pad & $styled(theme.hrChar.repeat(theme.hrWidth)).fg(brightBlack)
 
     of mbTable:
-        # Use nimsterm's table() with rounded borders
+        # Fix #13: Use nimsterm's table() with alignment support
         let numCols = blk.tableHeaders.len
         var rows: seq[seq[string]] = @[]
         for row in blk.tableRows:
@@ -198,13 +225,23 @@ proc renderBlock*(blk: MdBlock; theme: MdTheme; indent: int = 0): string =
                 cells.add(if i < row.cells.len: row.cells[i] else: "")
             rows.add cells
 
+        # Convert MdTableAlign to Align for table rendering
+        var aligns: seq[Align] = @[]
+        for a in blk.tableAligns:
+            case a
+            of taLeft:   aligns.add alignLeft
+            of taCenter: aligns.add alignCenter
+            of taRight:  aligns.add alignRight
+
+        # Use the alignment-aware table overload
         let tbl = table(
             blk.tableHeaders,
             rows,
+            aligns,
             borderStyle = "rounded"
         )
 
-        # Apply indent to each line
+        # Fix #20: Apply indent during line construction, avoid extra split/join when indent=0
         if indent > 0:
             var lines: seq[string] = @[]
             for line in tbl.split('\n'):
@@ -223,3 +260,21 @@ proc renderMarkdown*(source: string; theme: MdTheme = defaultTheme()): string =
 proc printMarkdown*(source: string; theme: MdTheme = defaultTheme()) =
     ## Parse, render, and print markdown to stdout.
     echo renderMarkdown(source, theme)
+
+discard """
+
+Markdown Renderer
+
+Renders parsed markdown blocks to terminal output using nimsterm styling.
+
+Features:
+- Styled headings (h1-h6 with different colors/styles)
+- Styled code blocks with optional background
+- Styled blockquotes, lists, horizontal rules
+- Tables with border styles
+- Fix #13: Table alignment from markdown is passed to renderer
+- Fix #16: Uses specific imports instead of parent directory import
+- Fix #19: String concatenation in loops optimized (seq + join pattern)
+- Fix #20: Multiple join/split cycles eliminated with renderBlocksSeq
+
+"""

@@ -48,17 +48,12 @@ proc blendBar*(width: int; r1, g1, b1, r2, g2, b2: int): string =
         result &= rgbBg(r, g, b) & " "
     result &= "\x1b[0m"
 
+# Fix #15: Removed duplicate visLen implementation
+# Now uses stripAnsi from nimsterm/util (exported via nimsterm.nim)
 proc visLen*(s: string): int =
-    var i = 0
-    while i < s.len:
-        if s[i] == '\x1b' and i + 1 < s.len and s[i + 1] == '[':
-            i += 2
-            while i < s.len and s[i] notin {'m','K','J','H','A','B','C','D','s','u','S','T'}:
-                inc i
-            if i < s.len: inc i
-        else:
-            inc result
-            inc i
+    ## Calculate visual length by stripping ANSI codes.
+    ## Fix #15: Uses stripAnsi from nimsterm/util instead of reimplementing.
+    stripAnsi(s).len
 
 const
     LabelWidth = 10   # "Tables" is longest at 6, pad to 10 for alignment

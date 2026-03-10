@@ -1,5 +1,5 @@
 import
-    std/unittest
+    std/[unittest, strutils]  # Added strutils for contains
     ,../src/nimsterm
 
 suite "table":

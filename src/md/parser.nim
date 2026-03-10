@@ -6,16 +6,26 @@ import
     ,./mdtypes
     ,./inline
 
+# Fix #12: Improved horizontal rule validation per CommonMark spec
 proc isHorizontalRule(line: string): bool =
+    ## CommonMark spec: A horizontal rule consists of three or more
+    ## hyphens, asterisks, or underscores, optionally separated by spaces.
+    ## The line must not contain any other characters.
     let s = line.strip()
     if s.len < 3: return false
+    
     let ch = s[0]
     if ch notin {'-', '*', '_'}: return false
-    for c in s:
-        if c != ch and c != ' ': return false
+    
     var count = 0
     for c in s:
-        if c == ch: inc count
+        if c == ch:
+            inc count
+        elif c != ' ':
+            # Any character other than the marker char or space invalidates
+            return false
+    
+    # Must have at least 3 marker characters
     count >= 3
 
 proc parseTableAligns(line: string): seq[MdTableAlign] =
@@ -250,3 +260,22 @@ proc parseBlocks*(source: string): seq[MdBlock] =
             inc i
         if paraLines.len > 0:
             result.add MdBlock(kind: mbParagraph, tokens: parseInline(paraLines.join(" ")))
+
+discard """
+
+Block-level Markdown Parser
+
+Parses:
+- Headings (# to ######)
+- Paragraphs
+- Code blocks (```)
+- Blockquotes (>)
+- Unordered lists (-, *, +)
+- Ordered lists (1., 2., etc)
+- Horizontal rules (---, ***, ___)
+- Tables (| col | col |)
+
+Fixes:
+- Fix #12: Improved horizontal rule validation per CommonMark spec
+
+"""
